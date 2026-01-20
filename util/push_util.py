@@ -210,21 +210,23 @@ def push_results(exec_results, summary, config: PushConfig):
 
 
 def not_in_push_time_range(config: PushConfig) -> bool:
-    """检查是否在推送时间范围内"""
+    """检查是否在推送时间范围内，支持多时间点"""
     if not config.push_plus_hour:
         return False  # 如果没有设置推送时间，则总是推送
 
     time_bj = get_beijing_time()
+    current_hour = time_bj.hour  # 获取当前小时数
 
-    # 首先根据时间判断，如果匹配 直接返回
-    if config.push_plus_hour.isdigit():
-        if time_bj.hour == int(config.push_plus_hour):
-            print(f"当前设置推送整点为：{config.push_plus_hour}, 当前整点为：{time_bj.hour}，执行推送")
-            return False
+    # 关键修改1：解析推送时间配置，支持多种格式
+    push_hours = parse_push_hours(config.push_plus_hour)
+    
+    # 关键修改2：使用 in 运算符检查当前小时是否在推送时间列表中
+    if current_hour in push_hours:
+        print(f"当前设置推送整点为：{push_hours}, 当前整点为：{current_hour}，执行推送")
+        return False  # 返回False表示应该推送
 
+    # 以下部分保持原样，用于处理GitHub Actions延迟的情况
     # 如果时间不匹配，检查cron_change_time文件中的记录
-    # 读取cron_change_time文件中的最后一行数据：“next exec time: UTC(7:35) 北京时间(15:35)” 中的整点数
-    # 然后用来对比是否当前时间，避免因为Actions执行延迟导致推送失效
     try:
         with open('cron_change_time', 'r') as f:
             lines = f.readlines()
@@ -235,14 +237,17 @@ def not_in_push_time_range(config: PushConfig) -> bool:
                 match = re.search(r'北京时间\(0?(\d+):\d+\)', last_line)
                 if match:
                     cron_hour = int(match.group(1))
-                    if int(config.push_plus_hour) == cron_hour:
-                        print(
-                            f"当前设置推送整点为：{config.push_plus_hour}, 根据执行记录，本次执行整点为：{cron_hour}，执行推送")
-                        return False
+                    # 关键修改3：这里也改为检查是否在列表中
+                    if cron_hour in push_hours:
+                        print(f"当前设置推送整点为：{push_hours}, 根据执行记录，本次执行整点为：{cron_hour}，执行推送")
+                        return False  # 返回False表示应该推送
     except Exception as e:
         print(f"读取cron_change_time文件出错: {e}")
-    print(f"当前整点时间为：{time_bj}，不在配置的推送时间，不执行推送")
-    return True
+    
+    # 如果都不匹配，打印日志并返回True（表示不推送）
+    print(f"当前整点时间为：{current_hour}:00，不在配置的推送时间 {push_hours}，不执行推送")
+    return True  # 返回True表示不应该推送
+    
 
 
 def push_to_push_plus(exec_results, summary, config: PushConfig):
