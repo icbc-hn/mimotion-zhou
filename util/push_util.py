@@ -4,6 +4,71 @@ import requests
 from datetime import datetime
 import pytz
 
+def parse_push_hours(push_hour_config):
+    """解析推送时间配置，支持多种格式：
+    1. 单个数字：'21'
+    2. 逗号分隔：'20,21'
+    3. JSON数组：[20, 21]
+    4. 整数：21
+    """
+    if not push_hour_config:
+        return [21]  # 默认值
+    
+    push_hours = []
+    
+    if isinstance(push_hour_config, str):
+        # 尝试解析逗号分隔的字符串
+        if ',' in push_hour_config:
+            parts = push_hour_config.split(',')
+            for part in parts:
+                part = part.strip()
+                if part.isdigit():
+                    hour = int(part)
+                    if 0 <= hour <= 23:
+                        push_hours.append(hour)
+        # 单个数字字符串
+        elif push_hour_config.isdigit():
+            hour = int(push_hour_config)
+            if 0 <= hour <= 23:
+                push_hours.append(hour)
+        # 尝试解析JSON数组格式
+        elif push_hour_config.startswith('[') and push_hour_config.endswith(']'):
+            try:
+                import json
+                hours_list = json.loads(push_hour_config)
+                if isinstance(hours_list, list):
+                    for hour in hours_list:
+                        if isinstance(hour, (int, str)):
+                            try:
+                                hour_int = int(hour)
+                                if 0 <= hour_int <= 23:
+                                    push_hours.append(hour_int)
+                            except ValueError:
+                                pass
+            except:
+                pass
+    elif isinstance(push_hour_config, int):
+        if 0 <= push_hour_config <= 23:
+            push_hours.append(push_hour_config)
+    elif isinstance(push_hour_config, list):
+        for hour in push_hour_config:
+            if isinstance(hour, (int, str)):
+                try:
+                    hour_int = int(hour)
+                    if 0 <= hour_int <= 23:
+                        push_hours.append(hour_int)
+                except ValueError:
+                    pass
+    
+    # 去重排序
+    push_hours = sorted(set(push_hours))
+    
+    # 如果解析失败，使用默认值
+    if not push_hours:
+        push_hours = [21]
+    
+    return push_hours
+
 
 def get_beijing_time():
     """获取北京时间"""
